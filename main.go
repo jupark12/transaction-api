@@ -12,7 +12,7 @@ import (
 
 type Transaction struct {
 	ID          int       `json:"id"`
-	Date        string    `json:"date"`
+	Date        time.Time `json:"date"`
 	Description string    `json:"description"`
 	Amount      float64   `json:"amount"`
 	Type        string    `json:"type"`
@@ -135,5 +135,5 @@ func main() {
 	defer pool.Close()
 
 	api := NewAPI(pool)
-	api.Run(":8080")
+	api.Run(":8050")
 }
