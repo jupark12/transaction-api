@@ -19,6 +19,12 @@ type Transaction struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type Job struct {
+	JobID     string    `json:"job_id"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type API struct {
 	db     *pgxpool.Pool
 	router *gin.Engine
@@ -50,6 +56,8 @@ func (api *API) setupRoutes() {
 	api.router.GET("/transactions", api.getTransactions)
 	api.router.GET("/transactions/:id", api.getTransaction)
 	api.router.GET("/stats", api.getStats)
+	api.router.DELETE(("/transactions/:id"), api.deleteTransaction)
+	api.router.DELETE("/jobs/most-recent", api.deleteMostRecentJob)
 }
 
 func (api *API) getTransactions(c *gin.Context) {
@@ -119,6 +127,45 @@ func (api *API) getStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, stats)
+}
+
+func (api *API) deleteTransaction(c *gin.Context) {
+	// Delete a transaction
+	id := c.Param("id")
+
+	result, err := api.db.Exec(context.Background(), "DELETE FROM transactions WHERE id = $1", id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if result.RowsAffected() == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Transaction not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Transaction deleted"})
+}
+
+func (api *API) deleteMostRecentJob(c *gin.Context) {
+	// Delete transaction done by most recent job by getting job_id of most recent transacion and deleting all transactions with same job_id
+	var jobID string
+	err := api.db.QueryRow(context.Background(), "SELECT job_id FROM transactions ORDER BY created_at DESC LIMIT 1").Scan(&jobID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := api.db.Exec(context.Background(), "DELETE FROM transactions WHERE job_id = $1", jobID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if result.RowsAffected() == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Transaction not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Most recent job transactions deleted"})
 }
 
 func (api *API) Run(addr string) error {
